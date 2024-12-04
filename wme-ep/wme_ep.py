@@ -62,13 +62,16 @@ def extract_details(row):
     text = row['text']
     
     # Extract details using regex
-    jira_id = re.search(r'Jira:(.*?)\n', text, re.DOTALL)
+    jira_id = re.search(r'https://jira-eng-gpk2\.cisco\.com/jira/browse/(WEBEX|SPARK)-\d+', text)
     if jira_id is None:
-        jira_id = re.search(r'JIRA:(.*?)\s', text, re.DOTALL)
-    pr_link = re.search(r'PR:(.*?)\n', text, re.DOTALL)
+        jira_id = re.search(r'\[(WEBEX|SPARK)-\d+\]', text)
+    jira_id = jira_id.group(0).strip() if jira_id else None
+    pr_link = re.search(r'https://sqbu-github\.cisco\.com/WebExSquared/wme/pull/\d+', text)
     if pr_link is None:
-        pr_link = re.search(r'PR link:(.*?)\s', text, re.DOTALL)
-    title = re.search(r'Title: (.*?)\n', text, re.DOTALL)
+        pr_link = re.search(r'https://sqbu-github\.cisco\.com/WebexApps/webex-apps/pull/\d+', text)
+    pr_link = pr_link.group(0).strip() if pr_link else None
+    title = re.search(r'Title:(.*?)\n', text, re.DOTALL)
+    title = title.group(1).strip() if title else None
     
     # Define markers and corresponding variables
     markers = {
@@ -113,9 +116,9 @@ def extract_details(row):
         marker_values[markers[current_marker]] = current_value.strip()
     
     return pd.Series({
-        'JiraID': jira_id.group(1).strip() if jira_id else None,
-        'PRLink': pr_link.group(1).strip() if pr_link else None,
-        'Title': title.group(1).strip() if title else None,
+        'JiraID': jira_id,
+        'PRLink': pr_link,
+        'Title': title,
         'EP-Category': marker_values['ep_category'] if 'ep_category' in marker_values else None,
         'WhyNeedEP': marker_values['why_need_ep'] if 'why_need_ep' in marker_values else None,
         'IsRegression': marker_values['is_regression']  if 'is_regression' in marker_values else None,
