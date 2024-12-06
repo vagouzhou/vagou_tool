@@ -1,9 +1,39 @@
 import requests
 import pandas as pd
 import re
+from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 
 source_file = '/Users/vagouz/Downloads/orignal.xlsx'
 output_file = '/Users/vagouz/Downloads/output.xlsx'
+def update_execl_format(excel_file):
+    # Load the workbook and select the active worksheet
+    workbook = load_workbook(excel_file)
+    sheet = workbook.active
+
+    # Iterate over all cells in the worksheet and set wrapText to True
+    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column):
+        for cell in row:
+            cell.alignment = Alignment(wrapText=True)
+
+    # Save the changes to the workbook
+    workbook.save(excel_file)
+
+email_groups = {
+    "audio": ["liechen@cisco.com","qunwan@cisco.com", "mingxuzh@cisco.com","borisl@cisco.com","huawan@cisco.com","feijie@cisco.com","mfei@cisco.com","bingyu2@cisco.com","mfei@cisco.com","yulyang@cisco.com","leiliu3@cisco.com"],
+    "video": ["bojfan@cisco.com", "benzzhan@cisco.com","xiangzhc@cisco.com","xuexin@cisco.com","jiaying@cisco.com"],
+    "sharing": ["shancxu@cisco.com","ebye@cisco.com","xiaolsun@cisco.com"],
+    "transimit": ["jiqin@cisco.com","sasensar@cisco.com","smalimat@cisco.com","joycqu@cisco.com"],
+    "mics": ["junga@cisco.com"]
+}
+
+def find_email_group(email):
+    # Iterate over the groups to find the email
+    for group, emails in email_groups.items():
+        if email in emails:
+            return group
+    return "Other"
 
 def get_api_response(api_url, token):
     # ciscospark://us/ROOM/3b5d69c0-8053-11ea-9696-51434787666c webexteams://im?space=3b5d69c0-8053-11ea-9696-51434787666c
@@ -115,10 +145,34 @@ def extract_details(row):
     if current_marker:
         marker_values[markers[current_marker]] = current_value.strip()
     
+    #
+    wme_module = find_email_group(row['personEmail'])
+
+    # Format the date
+    dt = datetime.strptime(row['created'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    formatted_date = dt.strftime("%Y-%m")
+
+    # Normalize the values
+    if 'ep_category' in marker_values:
+        if marker_values['ep_category'] is None:
+            marker_values['ep_category'] = 'Other'
+        if marker_values['ep_category'].lower().startswith('bug') or 'bug' in marker_values['ep_category'].lower():
+            marker_values['ep_category'] = 'Bug'
+        else:
+            marker_values['ep_category'] = 'Other'
+    
+    if 'is_regression' in marker_values:
+        if marker_values['is_regression'].lower().startswith('yes') or 'regression' in marker_values['is_regression'].lower():
+            marker_values['is_regression'] = 'Yes'
+        else:
+            marker_values['is_regression'] = 'No'
+
     return pd.Series({
         'JiraID': jira_id,
         'PRLink': pr_link,
         'Title': title,
+        'Month': formatted_date,
+        'wme_module': wme_module,
         'EP-Category': marker_values['ep_category'] if 'ep_category' in marker_values else None,
         'WhyNeedEP': marker_values['why_need_ep'] if 'why_need_ep' in marker_values else None,
         'IsRegression': marker_values['is_regression']  if 'is_regression' in marker_values else None,
@@ -142,10 +196,8 @@ if df_update is None:
 
 # Apply the function to each row to add new columns
 df_update = df_update.join(df_update.apply(extract_details, axis=1))
-
-# Move 'text' column to the last position
-columns = list(df_update.columns)
-columns.append(columns.pop(columns.index('text')))
-df_update = df_update[columns]
-
+# re-order columns
+df_update = df_update[['text', 'wme_module', 'Month', 'IsRegression', 'EP-Category', 'JiraID', 'PRLink', 'Title',  'WhyNeedEP',  'IssueImpact', 'Risk', 'IssueScope', 'WhatImprove',  'personEmail', 'created']]
+# Save the updated DataFrame to a new Excel file
 df_update.to_excel(output_file, index=False)
+update_execl_format(output_file)
